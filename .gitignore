@@ -3,6 +3,11 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+
+# ignore all files in data/chess except download.sh
+data/chess/*
+!data/chess/download.sh
+
 # C extensions
 *.so
 
