@@ -5,8 +5,10 @@ __pycache__/
 
 
 # ignore all files in data/chess except download.sh
-data/chess/*
+data/chess/**
 !data/chess/download.sh
+
+.DS_Store
 
 # C extensions
 *.so
