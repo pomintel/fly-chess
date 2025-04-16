@@ -6,7 +6,11 @@ __pycache__/
 
 # ignore all files in data/chess except download.sh
 data/chess/**
+**/chess_data/
 !data/chess/download.sh
+
+src/checkpoints/
+results/
 
 .DS_Store
 
@@ -179,3 +183,4 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+data/chess_data/

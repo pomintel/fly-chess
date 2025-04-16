@@ -20,12 +20,43 @@ from collections.abc import Callable, Mapping
 import dataclasses
 from typing import Any, NamedTuple, Protocol
 
-from apache_beam import coders
-from grain import python as pygrain
+import grain.python as pygrain
 import haiku as hk
 import jaxtyping as jtp
 
-from searchless_chess.src import config as config_lib
+from src.chess import config as config_lib
+
+# Optional imports
+try:
+    from apache_beam import coders
+    BEAM_AVAILABLE = True
+    
+    CODERS = {
+        'fen': coders.StrUtf8Coder(),
+        'move': coders.StrUtf8Coder(),
+        'count': coders.BigIntegerCoder(),
+        'win_prob': coders.FloatCoder(),
+    }
+    
+    CODERS['state_value'] = coders.TupleCoder((
+        CODERS['fen'],
+        CODERS['win_prob'],
+    ))
+    
+    CODERS['action_value'] = coders.TupleCoder((
+        CODERS['fen'],
+        CODERS['move'],
+        CODERS['win_prob'],
+    ))
+    
+    CODERS['behavioral_cloning'] = coders.TupleCoder((
+        CODERS['fen'],
+        CODERS['move'],
+    ))
+except ImportError:
+    BEAM_AVAILABLE = False
+    coders = None
+    CODERS = {}
 
 
 # Integer sequences of token ids.
@@ -80,27 +111,6 @@ class EvaluatorBuilder(Protocol):
         evaluation loop and passed to the evaluator's step method.
       config: The configuration of the evaluator.
     """
-
-
-CODERS = {
-    'fen': coders.StrUtf8Coder(),
-    'move': coders.StrUtf8Coder(),
-    'count': coders.BigIntegerCoder(),
-    'win_prob': coders.FloatCoder(),
-}
-CODERS['state_value'] = coders.TupleCoder((
-    CODERS['fen'],
-    CODERS['win_prob'],
-))
-CODERS['action_value'] = coders.TupleCoder((
-    CODERS['fen'],
-    CODERS['move'],
-    CODERS['win_prob'],
-))
-CODERS['behavioral_cloning'] = coders.TupleCoder((
-    CODERS['fen'],
-    CODERS['move'],
-))
 
 
 class BehavioralCloningData(NamedTuple):

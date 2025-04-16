@@ -1,0 +1,35 @@
+from setuptools import setup, find_packages
+
+setup(
+    name="fly-chess",
+    version="0.1",
+    packages=find_packages(),
+    install_requires=[
+        "numpy",
+        "jax",
+        "grain",
+        "absl-py",
+        "chess",
+        "chex",
+        "dm-haiku",
+        "grain-nightly",
+        "jax",
+        "jaxtyping",
+        "jupyter",
+        "optax",
+        "orbax-checkpoint",
+        "pandas",
+        "matplotlib",
+        "scipy",
+        "tqdm",
+        "torch",
+        "typing-extensions",
+        "cloudpickle~=2.2.1",
+        "dill>=0.3.1.1,<0.3.2",
+        "apache-beam[gcp]>=2.50.0",
+    ],
+    extras_require={
+        'beam': [],
+    },
+    python_requires=">=3.10",
+) 

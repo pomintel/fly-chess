@@ -1,0 +1,31 @@
+annotation_path: "data/drosophila/science.add9330_data_s2.csv"
+csv_paths:
+  signed: data/drosophila/ad_connectivity_matrix_signed.csv
+  unsigned: data/drosophila/ad_connectivity_matrix.csv
+signed: true
+sio: true
+rescale_factor: 0.04
+
+result_path: results
+
+policy: state_value
+train_num_sample: 500000
+timesteps: 5 # for timesteps in [2,5,10,15]:
+num_epoch: 10
+batch_size: 256
+#num_trials: 5
+
+# This is the part sent to tokenizer
+data:
+  data_choice: chess_SV
+  use_bucket: false
+
+experiments:
+  DPU_CNN_Unlearnable:
+    init: droso
+    trainable: false
+    drop_out: true
+    model_choice: basicCNN
+    filter_num: 1 # number of set of filters used in CNN probably 1 or 2.
+    input_type: sensory
+    output_type: output
