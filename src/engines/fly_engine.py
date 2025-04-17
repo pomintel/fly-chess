@@ -42,15 +42,12 @@ class FlyEngine(engine.Engine):
         Returns:
             Dictionary containing analysis results
         """
-        # Store the original board
         original_board = board.copy()
 
-        # Get probabilities for each legal move
         all_move_data = []
         legal_moves = list(board.legal_moves)
         move_probs = {}
 
-        # Process each legal move
         for move in legal_moves:
             board.push(move)
             data = tokenize(board.fen())
@@ -59,17 +56,14 @@ class FlyEngine(engine.Engine):
             all_move_data.append(data)
             board.pop()
 
-        # Get model outputs for all moves
         if all_move_data:
             data = torch.stack(all_move_data, dim=0)
             output = self.action_chooser.model(data)
             probs = F.softmax(output, dim=0)
 
-            # Store probabilities for each move
             for i, move in enumerate(legal_moves):
                 move_probs[move.uci()] = probs[i].tolist()
 
-        # Return analysis results
         return {"fen": original_board.fen(), "move_probs": move_probs}
 
     def play(self, board: chess.Board) -> chess.Move:
@@ -93,22 +87,18 @@ class UciFlyEngine:
         Args:
             model_path: Path to the model checkpoint
         """
-        # Get the absolute path of the project root directory
         project_root = os.path.dirname(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
         )
 
-        # Default model path if not specified
         if model_path is None:
             model_path = os.path.join(
                 project_root,
                 "results/DPU_CNN_Unlearnable_1filters_2560000_trial1_2Timesteps-signed/model.pth",
             )
-        # Ensure model_path is absolute
         elif not os.path.isabs(model_path):
             model_path = os.path.join(project_root, model_path)
 
-        # Create the engine
         self.engine = FlyEngine(model_path)
         self.board = chess.Board()
         self.debug = False
@@ -150,11 +140,9 @@ class UciFlyEngine:
                 "uciok"
             )
 
-        # Ready command
         elif cmd == "isready":
             return "readyok"
 
-        # Set options
         elif cmd == "setoption":
             if len(tokens) >= 5 and tokens[1] == "name" and tokens[3] == "value":
                 option_name = " ".join(tokens[2 : tokens.index("value")])
@@ -196,21 +184,17 @@ class UciFlyEngine:
 
             return ""
 
-        # New game
         elif cmd == "ucinewgame":
             self.board = chess.Board()
             return ""
 
-        # Position setup
         elif cmd == "position":
             if len(tokens) < 2:
                 return ""
 
-            # Starting position
             if tokens[1] == "startpos":
                 self.board = chess.Board()
                 move_idx = 3 if len(tokens) > 2 and tokens[2] == "moves" else 0
-            # Position from FEN
             elif tokens[1] == "fen":
                 fen_parts = []
                 i = 2
@@ -287,24 +271,18 @@ class UciFlyEngine:
                 think_time = max(1, think_time)  # Ensure positive think time
 
             try:
-                # Get board analysis
                 analysis = self.engine.analyse(self.board)
                 move_probs = analysis.get("move_probs", {})
 
-                # Get the best move
                 best_move = self.engine.play(self.board)
 
-                # Generate info string with evaluation
                 score_value = 0
                 for move_uci, prob in move_probs.items():
                     if move_uci == best_move.uci():
-                        # Use probability as a crude evaluation (scaled to centipawns)
                         score_value = int(prob[0] * 100)
                         break
 
-                # Return the best move with evaluation information
                 if self.debug:
-                    # Output debug information about move probabilities
                     info_lines = []
                     for move_uci, prob in sorted(
                         move_probs.items(), key=lambda x: x[1][0], reverse=True
@@ -318,12 +296,10 @@ class UciFlyEngine:
 
                     info_response = "\n".join(info_lines)
 
-                    # Add basic evaluation info
                     info_response += (
                         f"\ninfo score cp {score_value} depth 1 pv {best_move.uci()}"
                     )
 
-                    # Add WDL info if enabled
                     if self.show_wdl:
                         # Convert centipawn score to win/draw/loss probabilities
                         # This is a simple model - in a real engine this would be more sophisticated
@@ -340,7 +316,6 @@ class UciFlyEngine:
                         f"info score cp {score_value} depth 1 pv {best_move.uci()}"
                     )
 
-                    # Add WDL info if enabled
                     if self.show_wdl:
                         # Convert centipawn score to win/draw/loss probabilities
                         wdl_w = min(1000, max(0, 500 + score_value // 2))
@@ -350,24 +325,18 @@ class UciFlyEngine:
 
                     return info_response + f"\nbestmove {best_move.uci()}"
             except Exception as e:
-                # In case of error, return a default move (a1a1)
                 return f"info string Error generating move: {str(e)}\nbestmove a1a1"
 
-        # Quit
         elif cmd == "quit":
             return "quit"
 
-        # Stop (required by Lichess bot)
         elif cmd == "stop":
-            # We can't really stop since our engine doesn't do incremental search
-            # Just return the best move immediately
             try:
                 best_move = self.engine.play(self.board)
                 return f"bestmove {best_move.uci()}"
             except:
                 return "bestmove a1a1"
 
-        # Unknown command - silently ignore as per UCI spec
         return ""
 
     def run(self):
@@ -401,21 +370,17 @@ def create_uci_engine(model_path=None, *, command_queue=None, response_queue=Non
     Returns:
         A chess.engine.SimpleEngine instance
     """
-    # Get the absolute path of the project root directory
     project_root = os.path.dirname(
         os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     )
 
-    # Convert model_path to absolute path if provided and not already absolute
     if model_path and not os.path.isabs(model_path):
         model_path = os.path.join(project_root, model_path)
 
-    # Build a simple wrapper script to launch the UCI engine
     script_content = f"""
     import os
     import sys
     
-    # Add project root to path
     project_root = "{project_root}"
     sys.path.append(project_root)
     
@@ -425,16 +390,13 @@ def create_uci_engine(model_path=None, *, command_queue=None, response_queue=Non
     engine = UciFlyEngine(model_path)
     engine.run()
     """
-    # Create a temporary script file in the project root
     script_path = os.path.join(project_root, "uci_fly_engine_wrapper.py")
     with open(script_path, "w") as f:
         f.write(script_content)
 
-    # Launch the engine as a subprocess
     return chess.engine.SimpleEngine.popen_uci(command=["python", script_path])
 
 
 if __name__ == "__main__":
-    # If this file is run directly, start the UCI engine
     engine = UciFlyEngine()
     engine.run()
