@@ -12,6 +12,12 @@ data/chess/**
 src/checkpoints/
 results/
 
+# for tournament, need to be downloaded
+BayesElo/
+lc0/
+Stockfish/
+
+
 .DS_Store
 
 # C extensions

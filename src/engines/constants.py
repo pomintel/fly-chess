@@ -24,14 +24,15 @@ import chess.pgn
 from jax import random as jrandom
 import numpy as np
 
-from src.chess import tokenizer
-from src.chess import training_utils
-from src.chess import transformer
-from src.chess import utils
-from src.chess.engines import lc0_engine
-from src.chess.engines import neural_engines
-from src.chess.engines import stockfish_engine
-from src.fly_unit.action_chooser import FlyChessEngine
+from src.benchmark import tokenizer
+from src.benchmark import training_utils
+from src.benchmark import transformer
+from src.common import chess_utils
+from src.engines import lc0_engine
+from src.engines import neural_engines
+from src.engines import simple_engines
+from src.engines import stockfish_engine
+from src.engines import fly_engine
 
 
 def _build_neural_engine(
@@ -70,12 +71,12 @@ def _build_neural_engine(
         case "action_value":
             output_size = num_return_buckets
         case "behavioral_cloning":
-            output_size = utils.NUM_ACTIONS
+            output_size = chess_utils.NUM_ACTIONS
         case "state_value":
             output_size = num_return_buckets
 
     predictor_config = transformer.TransformerConfig(
-        vocab_size=utils.NUM_ACTIONS,
+        vocab_size=chess_utils.NUM_ACTIONS,
         output_size=output_size,
         pos_encodings=transformer.PositionalEncodings.LEARNED,
         max_sequence_length=tokenizer.SEQUENCE_LENGTH + 2,
@@ -91,7 +92,7 @@ def _build_neural_engine(
     checkpoint_dir = os.path.abspath(
         os.path.join(
             os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
-            "checkpoints",
+            "src/checkpoints",
             model_name,
         )
     )
@@ -103,7 +104,7 @@ def _build_neural_engine(
         ),
         step=checkpoint_step,
     )
-    _, return_buckets_values = utils.get_uniform_buckets_edges_values(
+    _, return_buckets_values = chess_utils.get_uniform_buckets_edges_values(
         num_return_buckets
     )
     return neural_engines.ENGINE_FROM_POLICY[policy](
@@ -116,13 +117,13 @@ def _build_neural_engine(
     )
 
 
-def _build_fly_chess_engine() -> FlyChessEngine:
+def _build_fly_engine() -> fly_engine.FlyEngine:
     """Returns a FlyChessEngine instance."""
     model_path = os.path.join(
         os.getcwd(),
-        "results/fly_model/model.pth",
+        "../results/DPU_CNN_Unlearnable_1filters_2560000_trial1_2Timesteps-signed/model.pth",
     )
-    return FlyChessEngine(path=model_path)
+    return fly_engine.FlyEngine(path=model_path)
 
 
 ENGINE_BUILDERS = {
@@ -151,5 +152,7 @@ ENGINE_BUILDERS = {
     "leela_chess_zero_400_sims": lambda: lc0_engine.Lc0Engine(
         limit=chess.engine.Limit(nodes=400),
     ),
-    "fly_chess": _build_fly_chess_engine,
+    "fly": _build_fly_engine,
+    "random": lambda: simple_engines.RandomAgent(),
+    "material_greedy": lambda: simple_engines.MaterialGreedyAgent(),
 }

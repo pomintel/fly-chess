@@ -4,48 +4,53 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset, DataLoader
 
-from src.chess import bagz, utils
-from src.chess import constants
-from src.fly_unit import tokenizer
-from src.fly_unit import config as config_lib
+from src.common import bagz, chess_utils
+from src.common import constants
+from src.fly.single import tokenizer
+from src.fly import config as config_lib
 
 
-def _process_fen(fen: str,config:dict) -> np.ndarray:
-    return tokenizer.tokenize(fen, config)
+def _process_fen(fen: str, config: dict) -> np.ndarray:
+    return tokenizer.tokenize(fen)
 
 
 def _process_move(move: str) -> np.ndarray:
-    return np.asarray([utils.MOVE_TO_ACTION[move]], dtype=np.int32)
+    return np.asarray([chess_utils.MOVE_TO_ACTION[move]], dtype=np.int32)
 
 
 def _process_win_prob(
-        win_prob: float,
-        return_buckets_edges: np.ndarray,
+    win_prob: float,
+    return_buckets_edges: np.ndarray,
 ) -> np.ndarray:
-    return utils.compute_return_buckets_from_returns(
+    return chess_utils.compute_return_buckets_from_returns(
         returns=np.asarray([win_prob]),
         bins_edges=return_buckets_edges,
     )
 
 
 def _get_uniform_bucket_edges(num_return_buckets: int):
-    bucket_edges, bucket_values = utils.get_uniform_buckets_edges_values(num_return_buckets)
+    bucket_edges, bucket_values = chess_utils.get_uniform_buckets_edges_values(
+        num_return_buckets
+    )
     return bucket_edges, bucket_values
 
 
 class BaseChessTransform:
 
     def __init__(self, config):
-        self.config = {**config['data'],**{'model_choice':config['model_choice']}}
+        self.config = {**config["data"], **{"model_choice": config["model_choice"]}}
+
 
 class ConvertStateValueDataToSequence(BaseChessTransform):
     """Converts (fen, win_prob) into a sequence of tokens [S; R]."""
+
     def __init__(self, config):
         super().__init__(config)
 
     def __call__(self, fen: str, win_prob: float):
-        state = _process_fen(fen,self.config)
-        return state,np.array([win_prob,1-win_prob])
+        state = _process_fen(fen, self.config)
+        return state, np.array([win_prob, 1 - win_prob])
+
 
 # TODO not implemented yet -> just keep it here. might need it for eval? - not really
 # class ConvertActionValueDataToSequence(BaseChessTransform):
@@ -64,20 +69,24 @@ class ConvertStateValueDataToSequence(BaseChessTransform):
 
 
 _TRANSFORMATION_BY_POLICY = {
-    'state_value': ConvertStateValueDataToSequence,
+    "state_value": ConvertStateValueDataToSequence,
 }
+
 
 class ChessDataset(Dataset):
     """
     PyTorch Dataset that reads from a .bag file, applies a transform,
     and returns (state, win_prob) after converting them to torch.Tensor.
     """
-    def __init__(self,
-                 data_path: str,
-                 coder_name: str,
-                 transform_obj: BaseChessTransform,
-                 num_records: int = None,
-                 seed: int = 12345):
+
+    def __init__(
+        self,
+        data_path: str,
+        coder_name: str,
+        transform_obj: BaseChessTransform,
+        num_records: int = None,
+        seed: int = 12345,
+    ):
         """
         Args:
           data_path: Path to the .bag file containing the raw chess data.
@@ -130,21 +139,23 @@ def seed_worker(worker_id):
     np.random.seed(worker_seed)
 
 
-def build_data_loader(config: config_lib.DataConfig,droso_config:dict) -> DataLoader:
+def build_data_loader(config: config_lib.DataConfig, droso_config: dict) -> DataLoader:
 
     data_path = os.path.join(
         os.getcwd(),
-        f'data/chess/{config.split}/{config.policy}_data.bag',
+        f"data/chess/{config.split}/{config.policy}_data.bag",
     )
-    if config.split == 'train':
+    if config.split == "train":
         subsample_data_path = os.path.join(
             os.getcwd(),
-            f'data/chess/subsample_train/subsample_{config.num_records}_trial{config.seed}.bag',
+            f"data/chess/subsample_train/subsample_{config.num_records}_trial{config.seed}.bag",
         )
         if os.path.exists(subsample_data_path):
             data_path = subsample_data_path
     if config.policy not in _TRANSFORMATION_BY_POLICY:
-        raise ValueError(f"Unknown policy '{config.policy}' for model_choice '{config.model_choice}'.")
+        raise ValueError(
+            f"Unknown policy '{config.policy}' for model_choice '{config.model_choice}'."
+        )
     transform_cls = _TRANSFORMATION_BY_POLICY[config.policy]
     transform_obj = transform_cls(droso_config)
 
@@ -153,7 +164,7 @@ def build_data_loader(config: config_lib.DataConfig,droso_config:dict) -> DataLo
         coder_name=config.policy,
         transform_obj=transform_obj,
         num_records=config.num_records,
-        seed=config.seed
+        seed=config.seed,
     )
 
     generator = torch.Generator()
@@ -166,7 +177,7 @@ def build_data_loader(config: config_lib.DataConfig,droso_config:dict) -> DataLo
         num_workers=config.worker_count,
         drop_last=True,
         worker_init_fn=seed_worker,
-        generator=generator
+        generator=generator,
     )
 
     return loader

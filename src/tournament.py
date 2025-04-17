@@ -20,6 +20,9 @@ import copy
 import datetime
 import itertools
 import os
+import atexit
+import signal
+import sys
 
 from absl import app
 from absl import flags
@@ -28,9 +31,9 @@ import chess.engine
 import chess.pgn
 import numpy as np
 
-from src.chess.engines import constants
-from src.chess.engines import engine
-from src.chess.engines import stockfish_engine
+from src.engines import constants
+from src.engines import engine
+from src.engines import stockfish_engine
 
 
 _NUM_GAMES = flags.DEFINE_integer(
@@ -46,6 +49,53 @@ _EVAL_STOCKFISH_ENGINE = stockfish_engine.StockfishEngine(
     limit=chess.engine.Limit(time=0.01)
 )
 _MIN_SCORE_TO_STOP = 1300
+
+# Global dictionary to store all engines for cleanup
+_ALL_ENGINES = {}
+
+
+def cleanup_engines():
+    """Safely close all engine instances."""
+    print("Cleaning up engine resources...")
+    # First close the evaluation engine
+    if (
+        hasattr(_EVAL_STOCKFISH_ENGINE, "_raw_engine")
+        and _EVAL_STOCKFISH_ENGINE._raw_engine is not None
+    ):
+        try:
+            _EVAL_STOCKFISH_ENGINE._raw_engine.close()
+            print("Closed evaluation Stockfish engine")
+        except Exception as e:
+            print(f"Error closing evaluation Stockfish engine: {e}")
+
+    # Then close all other engines
+    for name, engine_instance in _ALL_ENGINES.items():
+        if (
+            hasattr(engine_instance, "_raw_engine")
+            and engine_instance._raw_engine is not None
+        ):
+            try:
+                engine_instance._raw_engine.close()
+                print(f"Closed engine: {name}")
+            except Exception as e:
+                print(f"Error closing engine {name}: {e}")
+
+
+# Register cleanup function to be called at exit
+atexit.register(cleanup_engines)
+
+
+# Handle signals
+def signal_handler(sig, frame):
+    """Handle termination signals by cleaning up resources."""
+    print(f"Received signal {sig}, cleaning up...")
+    cleanup_engines()
+    sys.exit(0)
+
+
+# Register signal handlers
+signal.signal(signal.SIGINT, signal_handler)
+signal.signal(signal.SIGTERM, signal_handler)
 
 
 def _play_game(
@@ -151,54 +201,71 @@ def _run_tournament(
 
 
 def main(argv: Sequence[str]) -> None:
-    if len(argv) > 1:
-        raise app.UsageError("Too many command-line arguments.")
+    try:
+        if len(argv) > 1:
+            raise app.UsageError("Too many command-line arguments.")
 
-    # To ensure variability in the games we play, we use the openings from the
-    # Encyclopedia of Chess Openings.
-    openings_path = os.path.join(
-        os.getcwd(),
-        "../../data/chess/eco_openings.pgn",
-    )
-    opening_boards = list()
+        # To ensure variability in the games we play, we use the openings from the
+        # Encyclopedia of Chess Openings.
+        openings_path = os.path.join(
+            os.getcwd(),
+            "../data/chess/eco_openings.pgn",
+        )
+        opening_boards = list()
 
-    with open(openings_path, "r") as file:
-        while (game := chess.pgn.read_game(file)) is not None:
-            opening_boards.append(game.end().board())
+        with open(openings_path, "r") as file:
+            while (game := chess.pgn.read_game(file)) is not None:
+                opening_boards.append(game.end().board())
 
-    # We subsample the openings according to the desired number of games.
-    rng = np.random.default_rng(seed=1)
-    opening_indices = rng.choice(
-        np.arange(len(opening_boards)),
-        # Divide by two as we consider both sides per opening (white and black).
-        size=_NUM_GAMES.value // 2,
-        replace=False,
-    )
-    opening_boards = list(opening_boards[idx] for idx in opening_indices)
+        # We subsample the openings according to the desired number of games.
+        rng = np.random.default_rng(seed=1)
+        opening_indices = rng.choice(
+            np.arange(len(opening_boards)),
+            # Divide by two as we consider both sides per opening (white and black).
+            size=_NUM_GAMES.value // 2,
+            replace=False,
+        )
+        opening_boards = list(opening_boards[idx] for idx in opening_indices)
 
-    engines = {
-        agent: constants.ENGINE_BUILDERS[agent]()
-        for agent in [
-            # "9M",
-            # "136M",
-            "270M",
-            "stockfish",
-            # "stockfish_all_moves",
-            "leela_chess_zero_depth_1",
-            # "leela_chess_zero_policy_net",
-            # "leela_chess_zero_400_sims",
-        ]
-    }
+        # Create engines
+        global _ALL_ENGINES
+        _ALL_ENGINES = {
+            agent: constants.ENGINE_BUILDERS[agent]()
+            for agent in [
+                # "9M",
+                # "136M",
+                "fly",
+                "270M",
+                "stockfish",
+                # "stockfish_all_moves",
+                "leela_chess_zero_depth_1",
+                # "leela_chess_zero_policy_net",
+                # "leela_chess_zero_400_sims",
+                "random",
+                "material_greedy",
+            ]
+        }
 
-    games = _run_tournament(engines=engines, opening_boards=opening_boards)
+        # Run tournament
+        games = _run_tournament(engines=_ALL_ENGINES, opening_boards=opening_boards)
 
-    games_path = os.path.join(os.getcwd(), "../../data/chess/tournament_games.pgn")
+        # Save results
+        timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M")
+        games_path = os.path.join(
+            os.getcwd(), f"../data/chess/tournament_games_{timestamp}.pgn"
+        )
+        print(f"Writing games to {games_path}")
+        with open(games_path, "w") as file:
+            for game in games:
+                file.write(str(game))
+                file.write("\n\n")
 
-    print(f"Writing games to {games_path}")
-    with open(games_path, "w") as file:
-        for game in games:
-            file.write(str(game))
-            file.write("\n\n")
+    except Exception as e:
+        print(f"Error occurred: {e}")
+        raise
+    finally:
+        # Ensure engines are cleaned up
+        cleanup_engines()
 
 
 if __name__ == "__main__":

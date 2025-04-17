@@ -24,10 +24,10 @@ import jax.nn as jnn
 import numpy as np
 import scipy.special
 
-from src.chess import constants
-from src.chess import tokenizer
-from src.chess import utils
-from src.chess.engines import engine
+from src.common import constants
+from src.benchmark import tokenizer
+from src.common import chess_utils
+from src.engines import engine
 
 # Input = tokenized FEN, Output = log-probs, depends on the agent.
 PredictFn = Callable[[np.ndarray], np.ndarray]
@@ -74,7 +74,9 @@ class ActionValueEngine(NeuralEngine):
         """Returns buckets log-probs for each action, and FEN."""
         # Tokenize the legal actions.
         sorted_legal_moves = engine.get_ordered_legal_moves(board)
-        legal_actions = [utils.MOVE_TO_ACTION[x.uci()] for x in sorted_legal_moves]
+        legal_actions = [
+            chess_utils.MOVE_TO_ACTION[x.uci()] for x in sorted_legal_moves
+        ]
         legal_actions = np.array(legal_actions, dtype=np.int32)
         legal_actions = np.expand_dims(legal_actions, axis=-1)
         # Tokenize the return buckets.
@@ -163,11 +165,13 @@ class BCEngine(NeuralEngine):
         dummy_actions = np.zeros((1, 1), dtype=np.int32)
         sequences = np.concatenate([tokenized_fen, dummy_actions], axis=1)
         total_action_log_probs = self.predict_fn(sequences)[0, -1]
-        assert len(total_action_log_probs) == utils.NUM_ACTIONS
+        assert len(total_action_log_probs) == chess_utils.NUM_ACTIONS
 
         # We must renormalize the output distribution to only the legal moves.
         sorted_legal_moves = engine.get_ordered_legal_moves(board)
-        legal_actions = [utils.MOVE_TO_ACTION[x.uci()] for x in sorted_legal_moves]
+        legal_actions = [
+            chess_utils.MOVE_TO_ACTION[x.uci()] for x in sorted_legal_moves
+        ]
         legal_actions = np.array(legal_actions, dtype=np.int32)
         action_log_probs = total_action_log_probs[legal_actions]
         action_log_probs = jnn.log_softmax(action_log_probs)
