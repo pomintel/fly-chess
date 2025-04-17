@@ -1,0 +1,7 @@
+annotation_path: data/droso_data/neuron_category.pkl
+csv_paths:
+  signed: data/droso_data/signed_connectivity_matrix.csv
+  unsigned: data/droso_data/ad_connectivity_matrix.csv
+signed: true
+sio: true
+rescale_factor: 0.04

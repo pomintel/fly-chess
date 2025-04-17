@@ -1,0 +1,51 @@
+
+
+##### GLobal settings
+result_path: debug # results-chess-learn-KC
+seed: 1
+
+data_choice: chess_SV
+train_num_sample: 5303104
+
+input_type: sensory
+output_type: output
+learnable_type: 'all' # 'betweenKC', 'withinKC', 'all'
+num_heads: 1 # number of DPU to use
+timesteps: 8 # RNN timesteps
+
+#### Training configs
+num_epoch:
+use_steps: true
+num_steps: 1000000
+num_steps_eval: 5000
+batch_size: 64
+learning_rate: 0.0001
+dropout_rate: 0.2
+
+
+
+experiments:
+#  DPU_Base_Unlearnable_residual:
+#    init: droso
+#    learnable: false
+#    residual: true
+#    model_choice: RNN
+#
+#  DPU_CNN_Unlearnable_RELU_residual: # add relu after conv layers
+#    init: droso
+#    learnable: false
+#    residual: true
+#    model_choice: CNN
+#    num_conv: 1 # number of set of filters used in CNN probably 1 or 2.
+
+#  DPU_Base_Learnable_residual:
+#    init: droso
+#    learnable: true
+#    residual: true
+#    model_choice: RNN
+  DPU_CNN_Learnable_RELU_residual: # add relu after conv layers
+    init: droso
+    learnable: true
+    residual: true
+    model_choice: CNN
+    num_conv: 1 # number of set of filters used in CNN probably 1 or 2.
