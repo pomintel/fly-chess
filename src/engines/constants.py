@@ -121,7 +121,7 @@ def _build_fly_engine() -> fly_engine.FlyEngine:
     """Returns a FlyChessEngine instance."""
     model_path = os.path.join(
         os.getcwd(),
-        "../results/DPU_CNN_Unlearnable_1filters_2560000_trial1_2Timesteps-signed/model.pth",
+        "results/DPU_CNN_Unlearnable_1filters_2560000_trial1_2Timesteps-signed/model.pth",
     )
     return fly_engine.FlyEngine(path=model_path)
 
@@ -153,6 +153,7 @@ ENGINE_BUILDERS = {
         limit=chess.engine.Limit(nodes=400),
     ),
     "fly": _build_fly_engine,
+    "fly_uci": lambda: fly_engine.create_uci_engine(),
     "random": lambda: simple_engines.RandomAgent(),
     "material_greedy": lambda: simple_engines.MaterialGreedyAgent(),
 }

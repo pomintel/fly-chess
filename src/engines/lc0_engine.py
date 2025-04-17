@@ -35,12 +35,12 @@ class Lc0Engine(engine.Engine):
         self._limit = limit
         bin_path = os.path.join(
             os.getcwd(),
-            "../lc0/build/release/lc0",
+            "lc0/build/release/lc0",
         )
         # We use the biggest available network.
         weights_path = os.path.join(
             os.getcwd(),
-            "../lc0/build/release/768x15x24h-t82-swa-7464000.pb",
+            "lc0/build/release/768x15x24h-t82-swa-7464000.pb",
         )
         options = [f"--weights={weights_path}"]
         self._raw_engine = chess.engine.SimpleEngine.popen_uci(

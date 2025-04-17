@@ -33,7 +33,7 @@ class StockfishEngine(engine.Engine):
         self._skill_level = None
         bin_path = os.path.join(
             os.getcwd(),
-            "../Stockfish/src/stockfish",
+            "Stockfish/src/stockfish",
         )
         self._raw_engine = chess.engine.SimpleEngine.popen_uci(bin_path)
 

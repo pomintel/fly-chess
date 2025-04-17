@@ -209,7 +209,7 @@ def main(argv: Sequence[str]) -> None:
         # Encyclopedia of Chess Openings.
         openings_path = os.path.join(
             os.getcwd(),
-            "../data/chess/eco_openings.pgn",
+            "data/chess/eco_openings.pgn",
         )
         opening_boards = list()
 
@@ -252,7 +252,7 @@ def main(argv: Sequence[str]) -> None:
         # Save results
         timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M")
         games_path = os.path.join(
-            os.getcwd(), f"../data/chess/tournament_games_{timestamp}.pgn"
+            os.getcwd(), f"data/chess/tournament_games_{timestamp}.pgn"
         )
         print(f"Writing games to {games_path}")
         with open(games_path, "w") as file:
