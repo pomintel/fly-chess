@@ -11,5 +11,6 @@ numpy
 optax
 orbax-checkpoint
 pandas
+pyyaml
 scipy
 typing-extensions

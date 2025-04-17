@@ -119,11 +119,29 @@ def _build_neural_engine(
 
 def _build_fly_engine() -> fly_engine.FlyEngine:
     """Returns a FlyChessEngine instance."""
-    model_path = os.path.join(
-        os.getcwd(),
-        "results/DPU_CNN_Unlearnable_1filters_2560000_trial1_2Timesteps-signed/model.pth",
-    )
-    return fly_engine.FlyEngine(path=model_path)
+    try:
+        import yaml
+
+        # Get the absolute path of the project root directory
+        project_root = os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        )
+
+        # Use absolute path for config file
+        config_path = os.path.join(project_root, "configs/engine.yaml")
+        if os.path.exists(config_path):
+            with open(config_path, "r") as f:
+                config = yaml.safe_load(f)
+            model_path = config.get("fly_engine", {}).get("model_path")
+            device = config.get("fly_engine", {}).get("device")
+            if model_path:
+                if not os.path.isabs(model_path):
+                    model_path = os.path.join(project_root, model_path)
+                return fly_engine.FlyEngine(path=model_path, device=device)
+    except (ImportError, FileNotFoundError, KeyError):
+        pass
+
+    return None
 
 
 ENGINE_BUILDERS = {

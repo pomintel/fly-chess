@@ -23,13 +23,14 @@ setup(
         "scipy",
         "tqdm",
         "torch",
+        "pyyaml",
         "typing-extensions",
         "cloudpickle~=2.2.1",
         "dill>=0.3.1.1,<0.3.2",
         "apache-beam[gcp]>=2.50.0",
     ],
     extras_require={
-        'beam': [],
+        "beam": [],
     },
     python_requires=">=3.10",
-) 
+)

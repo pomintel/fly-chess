@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import subprocess
 import threading
 import torch
@@ -92,19 +93,32 @@ class UciFlyEngine:
         Args:
             model_path: Path to the model checkpoint
         """
+        # Get the absolute path of the project root directory
+        project_root = os.path.dirname(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        )
+
         # Default model path if not specified
         if model_path is None:
             model_path = os.path.join(
-                os.getcwd(),
-                "../results/DPU_CNN_Unlearnable_1filters_2560000_trial1_2Timesteps-signed/model.pth",
+                project_root,
+                "results/DPU_CNN_Unlearnable_1filters_2560000_trial1_2Timesteps-signed/model.pth",
             )
+        # Ensure model_path is absolute
+        elif not os.path.isabs(model_path):
+            model_path = os.path.join(project_root, model_path)
 
         # Create the engine
         self.engine = FlyEngine(model_path)
         self.board = chess.Board()
         self.debug = False
-        self.name = "Floyd"
+        self.name = "FlyChess"
         self.author = "Pomintel"
+        self.move_overhead = 30  # Default move overhead in milliseconds
+        self.threads = 1  # Default number of threads
+        self.hash_size = 16  # Default hash size in MB
+        self.syzygy_path = ""  # Default empty path for Syzygy endgame tablebases
+        self.show_wdl = True  # Default to showing WDL
 
     def process_command(self, command):
         """Process a UCI command and return the response.
@@ -127,6 +141,11 @@ class UciFlyEngine:
                 f"id name {self.name}\n"
                 f"id author {self.author}\n"
                 "option name Debug type check default false\n"
+                "option name Move Overhead type spin default 30 min 0 max 5000\n"
+                "option name Threads type spin default 1 min 1 max 512\n"
+                "option name Hash type spin default 16 min 1 max 33554432\n"
+                "option name SyzygyPath type string default \n"
+                "option name UCI_ShowWDL type check default true\n"
                 "option name Model Path type string default results/DPU_CNN_Unlearnable_1filters_2560000_trial1_2Timesteps-signed/model.pth\n"
                 "uciok"
             )
@@ -138,12 +157,41 @@ class UciFlyEngine:
         # Set options
         elif cmd == "setoption":
             if len(tokens) >= 5 and tokens[1] == "name" and tokens[3] == "value":
-                option_name = tokens[2]
+                option_name = " ".join(tokens[2 : tokens.index("value")])
                 option_value = tokens[4]
 
                 if option_name == "Debug":
                     self.debug = option_value.lower() == "true"
+                elif option_name == "Move Overhead":
+                    try:
+                        self.move_overhead = int(option_value)
+                    except ValueError:
+                        pass  # Ignore invalid values
+                elif option_name == "Threads":
+                    try:
+                        self.threads = int(option_value)
+                        # We don't actually use multiple threads, but we accept the option
+                    except ValueError:
+                        pass  # Ignore invalid values
+                elif option_name == "Hash":
+                    try:
+                        self.hash_size = int(option_value)
+                        # We don't actually use hash tables, but we accept the option
+                    except ValueError:
+                        pass  # Ignore invalid values
+                elif option_name == "SyzygyPath":
+                    self.syzygy_path = option_value
+                elif option_name == "UCI_ShowWDL":
+                    self.show_wdl = option_value.lower() == "true"
                 elif option_name == "Model Path":
+                    # Get project root path
+                    project_root = os.path.dirname(
+                        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+                    )
+                    # Make path absolute if it's not already
+                    if not os.path.isabs(option_value):
+                        option_value = os.path.join(project_root, option_value)
+                    # Create a new engine instance with the specified model
                     self.engine = FlyEngine(option_value)
 
             return ""
@@ -190,32 +238,137 @@ class UciFlyEngine:
 
         # Generate a move
         elif cmd == "go":
-            # Parse optional parameters (time control, etc.)
-            # For simplicity, we're ignoring time control for now
+            # Handle time control parameters
+            wtime = btime = winc = binc = None
+            movetime = None
+            depth = None
+
+            # Parse parameters
+            i = 1
+            while i < len(tokens):
+                if tokens[i] == "wtime" and i + 1 < len(tokens):
+                    wtime = int(tokens[i + 1])
+                    i += 2
+                elif tokens[i] == "btime" and i + 1 < len(tokens):
+                    btime = int(tokens[i + 1])
+                    i += 2
+                elif tokens[i] == "winc" and i + 1 < len(tokens):
+                    winc = int(tokens[i + 1])
+                    i += 2
+                elif tokens[i] == "binc" and i + 1 < len(tokens):
+                    binc = int(tokens[i + 1])
+                    i += 2
+                elif tokens[i] == "movetime" and i + 1 < len(tokens):
+                    movetime = int(tokens[i + 1])
+                    i += 2
+                elif tokens[i] == "depth" and i + 1 < len(tokens):
+                    depth = int(tokens[i + 1])
+                    i += 2
+                else:
+                    i += 1
+
+            # Calculate time to think (Lichess will handle this for us, but it's good to have)
+            # This doesn't actually affect our engine's thinking time but demonstrates correct handling
+            think_time = None
+            if movetime is not None:
+                # If movetime is specified, use that minus the move overhead
+                think_time = max(1, movetime - self.move_overhead)
+            elif wtime is not None and btime is not None:
+                # Calculate based on whose turn it is
+                if self.board.turn == chess.WHITE and wtime is not None:
+                    remaining = wtime
+                    increment = winc if winc is not None else 0
+                else:
+                    remaining = btime
+                    increment = binc if binc is not None else 0
+
+                # Simple time management: use 1/20th of remaining time + half of increment
+                think_time = remaining // 20 + increment // 2 - self.move_overhead
+                think_time = max(1, think_time)  # Ensure positive think time
 
             try:
+                # Get board analysis
+                analysis = self.engine.analyse(self.board)
+                move_probs = analysis.get("move_probs", {})
+
+                # Get the best move
                 best_move = self.engine.play(self.board)
+
+                # Generate info string with evaluation
+                score_value = 0
+                for move_uci, prob in move_probs.items():
+                    if move_uci == best_move.uci():
+                        # Use probability as a crude evaluation (scaled to centipawns)
+                        score_value = int(prob[0] * 100)
+                        break
+
+                # Return the best move with evaluation information
                 if self.debug:
-                    analysis = self.engine.analyse(self.board)
-                    probs = analysis.get("move_probs", {})
+                    # Output debug information about move probabilities
+                    info_lines = []
+                    for move_uci, prob in sorted(
+                        move_probs.items(), key=lambda x: x[1][0], reverse=True
+                    ):
+                        info_lines.append(f"info string {move_uci}:{prob[0]:.4f}")
 
-                    # Output debug info about move probabilities
-                    info_str = "info string Move probabilities:"
-                    for move_uci, prob in probs.items():
-                        info_str += f" {move_uci}:{prob[0]:.4f}"
+                    if think_time is not None:
+                        info_lines.append(
+                            f"info string think_time={think_time}ms overhead={self.move_overhead}ms"
+                        )
 
-                    return f"{info_str}\nbestmove {best_move.uci()}"
+                    info_response = "\n".join(info_lines)
+
+                    # Add basic evaluation info
+                    info_response += (
+                        f"\ninfo score cp {score_value} depth 1 pv {best_move.uci()}"
+                    )
+
+                    # Add WDL info if enabled
+                    if self.show_wdl:
+                        # Convert centipawn score to win/draw/loss probabilities
+                        # This is a simple model - in a real engine this would be more sophisticated
+                        wdl_w = min(
+                            1000, max(0, 500 + score_value // 2)
+                        )  # Win probability (0-1000)
+                        wdl_l = 1000 - wdl_w  # Loss probability
+                        wdl_d = 0  # Draw probability - set to 0 for simplicity
+                        info_response += f" wdl {wdl_w} {wdl_d} {wdl_l}"
+
+                    return info_response + f"\nbestmove {best_move.uci()}"
                 else:
-                    return f"bestmove {best_move.uci()}"
+                    info_response = (
+                        f"info score cp {score_value} depth 1 pv {best_move.uci()}"
+                    )
+
+                    # Add WDL info if enabled
+                    if self.show_wdl:
+                        # Convert centipawn score to win/draw/loss probabilities
+                        wdl_w = min(1000, max(0, 500 + score_value // 2))
+                        wdl_l = 1000 - wdl_w
+                        wdl_d = 0
+                        info_response += f" wdl {wdl_w} {wdl_d} {wdl_l}"
+
+                    return info_response + f"\nbestmove {best_move.uci()}"
             except Exception as e:
+                # In case of error, return a default move (a1a1)
                 return f"info string Error generating move: {str(e)}\nbestmove a1a1"
 
         # Quit
         elif cmd == "quit":
             return "quit"
 
-        # Unknown command
-        return f"info string Unknown command: {command}"
+        # Stop (required by Lichess bot)
+        elif cmd == "stop":
+            # We can't really stop since our engine doesn't do incremental search
+            # Just return the best move immediately
+            try:
+                best_move = self.engine.play(self.board)
+                return f"bestmove {best_move.uci()}"
+            except:
+                return "bestmove a1a1"
+
+        # Unknown command - silently ignore as per UCI spec
+        return ""
 
     def run(self):
         """Run the UCI engine, reading from stdin and writing to stdout."""
@@ -248,19 +401,32 @@ def create_uci_engine(model_path=None, *, command_queue=None, response_queue=Non
     Returns:
         A chess.engine.SimpleEngine instance
     """
+    # Get the absolute path of the project root directory
+    project_root = os.path.dirname(
+        os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    )
+
+    # Convert model_path to absolute path if provided and not already absolute
+    if model_path and not os.path.isabs(model_path):
+        model_path = os.path.join(project_root, model_path)
+
     # Build a simple wrapper script to launch the UCI engine
     script_content = f"""
-        import os
-        import sys
-        sys.path.append(os.getcwd())
-        from src.engines.fly_engine import UciFlyEngine
+    import os
+    import sys
+    
+    # Add project root to path
+    project_root = "{project_root}"
+    sys.path.append(project_root)
+    
+    from src.engines.fly_engine import UciFlyEngine
 
-        model_path = "{model_path}" if "{model_path}" else None
-        engine = UciFlyEngine(model_path)
-        engine.run()
-        """
-    # Create a temporary script file
-    script_path = os.path.join(os.getcwd(), "uci_fly_engine_wrapper.py")
+    model_path = "{model_path}" if "{model_path}" else None
+    engine = UciFlyEngine(model_path)
+    engine.run()
+    """
+    # Create a temporary script file in the project root
+    script_path = os.path.join(project_root, "uci_fly_engine_wrapper.py")
     with open(script_path, "w") as f:
         f.write(script_content)
 

@@ -1,0 +1,13 @@
+# Engine configuration
+
+# Fly engine model configuration
+fly_engine:
+  model_path: "results/DPU_CNN_Unlearnable_1filters_2560000_trial1_2Timesteps-signed/model.pth"
+  device: null  # Set to "cuda", "mps", or "cpu". If null, will automatically select the best available device
+
+# Other engine configurations can be added here
+stockfish:
+  time_limit: 0.05
+
+neural_engines:
+  default_model: "9M" 
