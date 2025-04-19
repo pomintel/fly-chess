@@ -39,14 +39,19 @@ def sample(
     np.random.seed(trial_num)
     train_config.data.seed = trial_num
 
+    # Assume droso_config contains the absolute data_root path
+    data_root = droso_config["data_root"]
+
     train_loader = build_data_loader(
-        config=train_config.data, droso_config=droso_config
+        config=train_config.data, droso_config=droso_config, data_root=data_root
     )
     train_dataset = train_loader.dataset
     num_records = len(train_dataset)
     print(f"Dataset has {num_records} records.")
+
+    # Construct the output path using data_root
     out_train_set_path = os.path.join(
-        "data",
+        data_root,
         "chess",
         "subsample_train",
         f"subsample_{num_records}_trial{trial_num}.bag",

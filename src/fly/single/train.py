@@ -13,12 +13,17 @@ from src.common.matrix_utils import get_weight_matrix
 from src.fly import config as config_lib
 from src.fly.single.net import BasicCNN
 
+# Add os.path for absolute path handling
+import os.path
+
 
 def get_out_path(droso_config):
+    # Assume droso_config["result_path"] is already absolute
     out_folder_name = (
         f"{droso_config['exp_id']}_trial{1}_{droso_config.get('timesteps', 1)}Timesteps"
         + ("-signed" if droso_config.get("signed", True) else "")
     )
+    # Use the absolute result_path directly
     return os.path.join(droso_config["result_path"], out_folder_name)
 
 
@@ -35,10 +40,15 @@ def train(
     np.random.seed(trial_num)
     train_config.data.seed = trial_num
 
+    # Extract absolute data_root from config
+    data_root = droso_config["data_root"]
+
     train_loader = build_data_loader(
-        config=train_config.data, droso_config=droso_config
+        config=train_config.data, droso_config=droso_config, data_root=data_root
     )
-    test_loader = build_data_loader(config=test_config.data, droso_config=droso_config)
+    test_loader = build_data_loader(
+        config=test_config.data, droso_config=droso_config, data_root=data_root
+    )
     model = initialize_model(train_config, droso_config)
     model.to(device)
 
@@ -72,12 +82,14 @@ def train(
     out_path = get_out_path(droso_config)
     os.makedirs(out_path, exist_ok=True)
 
+    # Paths are now absolute
     model_path = os.path.join(out_path, "model.pth")
     checkpoint = {"model": model, "config": droso_config}
     torch.save(checkpoint, model_path)
 
     # save loss records
-    with open(os.path.join(out_path, "record.pkl"), "wb") as f:
+    record_path = os.path.join(out_path, "record.pkl")
+    with open(record_path, "wb") as f:
         pickle.dump(results, f)
 
     print(
@@ -165,14 +177,22 @@ def initialize_model(config, config_data):
     data_setup = config_data.get("data")
     model_type = config.data.model_choice
 
+    # Assume config_data contains absolute paths for csv_paths and annotation_path
+    data_root = config_data[
+        "data_root"
+    ]  # Needed for potentially resolving paths within load_connectivity_data
+    annotation_path = config_data["annotation_path"]
+    signed_csv_path = config_data["csv_paths"]["signed"]
+
     if data_setup["data_choice"] == "chess_SV":
         num_out = config.data.num_return_buckets if data_setup["use_bucket"] else 2
     else:
         raise NotImplementedError("No other dataset is supported")
 
     conn = load_connectivity_data(
-        connectivity_path=config_data["csv_paths"]["signed"],
-        annotation_path=config_data["annotation_path"],
+        # Pass absolute paths
+        connectivity_path=signed_csv_path,
+        annotation_path=annotation_path,
         rescale_factor=config_data.get("rescale_factor", 4e-2),
         sensory_type=config_data.get("sensory_type", "all"),
     )

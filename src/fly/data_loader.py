@@ -1,4 +1,5 @@
 import os
+import os.path
 
 import numpy as np
 import torch
@@ -139,19 +140,36 @@ def seed_worker(worker_id):
     np.random.seed(worker_seed)
 
 
-def build_data_loader(config: config_lib.DataConfig, droso_config: dict) -> DataLoader:
+def build_data_loader(
+    config: config_lib.DataConfig, droso_config: dict, data_root: str
+) -> DataLoader:
+    """
+    Builds a DataLoader for chess data.
 
+    Args:
+        config: Data configuration object.
+        droso_config: Drosophila-specific configuration.
+        data_root: The absolute path to the root directory containing the data.
+    """
+    # Construct paths relative to the provided data_root
+    base_chess_path = os.path.join(data_root, "chess")
     data_path = os.path.join(
-        os.getcwd(),
-        f"data/chess/{config.split}/{config.policy}_data.bag",
+        base_chess_path, f"{config.split}/{config.policy}_data.bag"
     )
+
     if config.split == "train":
+        subsample_dir = os.path.join(base_chess_path, "subsample_train")
         subsample_data_path = os.path.join(
-            os.getcwd(),
-            f"data/chess/subsample_train/subsample_{config.num_records}_trial{config.seed}.bag",
+            subsample_dir,
+            f"subsample_{config.num_records}_trial{config.seed}.bag",
         )
+        # Check existence using the absolute path
         if os.path.exists(subsample_data_path):
             data_path = subsample_data_path
+        # Optional: Create subsample directory if it doesn't exist, though this might belong elsewhere
+        # else:
+        #     os.makedirs(subsample_dir, exist_ok=True)
+
     if config.policy not in _TRANSFORMATION_BY_POLICY:
         raise ValueError(
             f"Unknown policy '{config.policy}' for model_choice '{config.model_choice}'."

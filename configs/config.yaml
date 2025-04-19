@@ -2,6 +2,10 @@ annotation_path: "data/drosophila/science.add9330_data_s2.csv"
 csv_paths:
   signed: data/drosophila/ad_connectivity_matrix_signed.csv
   unsigned: data/drosophila/ad_connectivity_matrix.csv
+
+# Root directory for all datasets
+data_root: "data"
+
 signed: true
 sio: true
 rescale_factor: 0.04

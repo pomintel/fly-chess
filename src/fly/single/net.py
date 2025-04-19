@@ -25,13 +25,19 @@ class BasicCNN(nn.Module):
         cumulate_output: bool = False,
         use_residual: bool = False,
         use_relu: bool = False,
+        input_channels=20,  # Changed default to 20 to directly support the new tokenizer
     ):
         super().__init__()
         self.use_relu = use_relu
         self.filter_num = filter_num
+        self.input_channels = input_channels  # Store for use in forward method
+
+        # Modify convolution layers to directly support 20 input channels
         self.convs = nn.ModuleList(
             [
-                nn.Conv2d(8, self.filter_num, kernel_size=k, stride=1, padding=0)
+                nn.Conv2d(
+                    input_channels, self.filter_num, kernel_size=k, stride=1, padding=0
+                )
                 for k in range(1, 9)
             ]
         )
@@ -39,6 +45,7 @@ class BasicCNN(nn.Module):
             sum((8 - k + 1) ** 2 for k in range(1, 9)) * self.filter_num
         )
         print(f"CNN output feature ct = {self.cnn_output_dim}")
+        print(f"Initialized BasicCNN with {input_channels} input channels")
 
         self.basicrnn = BasicRNN(
             W_init=W_init,
@@ -62,10 +69,15 @@ class BasicCNN(nn.Module):
         )
 
     def forward(self, x):
+        # Input shape is [batch_size, height, width, channels]
+        # Permute dimensions to [batch_size, channels, height, width] for convolution
+        x_permuted = x.permute(0, 3, 1, 2)
+
+        # Process with convolutions
         if hasattr(self, "use_relu") and self.use_relu:
-            conv_outputs = [F.relu(conv(x.permute(0, 3, 1, 2))) for conv in self.convs]
+            conv_outputs = [F.relu(conv(x_permuted)) for conv in self.convs]
         else:
-            conv_outputs = [conv(x.permute(0, 3, 1, 2)) for conv in self.convs]
+            conv_outputs = [conv(x_permuted) for conv in self.convs]
 
         conv_outputs = torch.cat(
             [out.reshape(out.size(0), -1) for out in conv_outputs], dim=1
@@ -400,34 +412,43 @@ class TwoHiddenMLP(nn.Module):
 
 
 class CNN(nn.Module):
-    def __init__(self, input_channels=256, hidden_units=509, num_classes=10):
+    def __init__(self, input_channels=20, hidden_units=509, num_classes=10):
         super().__init__()
+        self.input_channels = input_channels
 
-        # First convolutional layer
+        # First convolutional layer - directly using the full 20 channels
         self.conv1 = nn.Conv2d(
-            in_channels=input_channels, out_channels=8, kernel_size=3, padding=1
+            in_channels=input_channels, out_channels=32, kernel_size=3, padding=1
         )
         self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)
 
         # Second convolutional layer
-        self.conv2 = nn.Conv2d(in_channels=8, out_channels=16, kernel_size=3, padding=1)
+        self.conv2 = nn.Conv2d(
+            in_channels=32, out_channels=64, kernel_size=3, padding=1
+        )
         self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)
 
-        # Fully connected layers
-        self.fc1 = nn.Linear(16 * 7 * 7, hidden_units)
+        # Fully connected layers - adjust size based on pooling
+        self.fc1 = nn.Linear(64 * 2 * 2, hidden_units)
         self.fc2 = nn.Linear(hidden_units, num_classes)
 
         # Activation function
         self.relu = nn.ReLU()
 
-    def forward(self, x):
-        # First conv block
-        x = self.pool1(self.relu(self.conv1(x)))
+        print(f"Initialized CNN with {input_channels} input channels")
 
-        # Second conv block
+    def forward(self, x):
+        # Input shape is [batch_size, height, width, channels]
+        # Permute to [batch_size, channels, height, width] for convolution
+        if x.shape[1] == 8 and x.shape[2] == 8 and x.shape[3] == self.input_channels:
+            # Format is [batch, height, width, channels]
+            x = x.permute(0, 3, 1, 2)
+
+        # Now process with convolutions
+        x = self.pool1(self.relu(self.conv1(x)))
         x = self.pool2(self.relu(self.conv2(x)))
 
-        # Flatten and fully connected layers
+        # Flatten and apply fully connected layers
         x = x.view(x.size(0), -1)
         x = self.relu(self.fc1(x))
         x = self.fc2(x)

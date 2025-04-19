@@ -1,13 +1,44 @@
 import copy
 import yaml
+import os
+import os.path
 from src.fly import config as config_lib
 from src.fly import data_loader as data_loader
 from src.fly import sampling
 
 
 def main():
-    with open("configs/config.yaml", "r") as f:
+    # Determine project root (assuming script is in 'scripts' or run from root)
+    script_dir = os.path.dirname(os.path.realpath(__file__))
+    project_root = os.path.abspath(os.path.join(script_dir, os.pardir))
+
+    config_path = os.path.join(project_root, "configs", "config.yaml")
+    with open(config_path, "r") as f:
         base_config = yaml.safe_load(f)
+
+    # Resolve paths to absolute paths relative to project_root
+    def resolve_path(rel_path):
+        # Handle potential None or empty paths gracefully if needed
+        if not rel_path:
+            return rel_path
+        return os.path.abspath(os.path.join(project_root, rel_path))
+
+    # Make sure all relevant paths from base_config are resolved
+    if "data_root" in base_config:
+        base_config["data_root"] = resolve_path(base_config["data_root"])
+    if "result_path" in base_config:
+        base_config["result_path"] = resolve_path(base_config["result_path"])
+    if "annotation_path" in base_config:
+        base_config["annotation_path"] = resolve_path(base_config["annotation_path"])
+    if "csv_paths" in base_config and "signed" in base_config["csv_paths"]:
+        base_config["csv_paths"]["signed"] = resolve_path(
+            base_config["csv_paths"]["signed"]
+        )
+    if "csv_paths" in base_config and "unsigned" in base_config["csv_paths"]:
+        base_config["csv_paths"]["unsigned"] = resolve_path(
+            base_config["csv_paths"]["unsigned"]
+        )
+
     batch_size = base_config.pop("batch_size")
     num_epoch = base_config.pop("num_epoch")
     num_records = base_config.pop("train_num_sample")

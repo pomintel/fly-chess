@@ -7,7 +7,9 @@ fly_engine:
 
 # Other engine configurations can be added here
 stockfish:
+  path: "Stockfish/src/stockfish"  # Relative path to stockfish binary from project root
   time_limit: 0.05
+  # skill_level: 20 # Optional: Uncomment and set skill level (0-20)
 
 neural_engines:
   default_model: "9M" 

@@ -16,7 +16,9 @@ results/
 BayesElo/
 lc0/
 Stockfish/
+tournament_results/
 
+settings.json
 
 .DS_Store
 
